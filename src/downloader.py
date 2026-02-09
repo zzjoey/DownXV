@@ -13,6 +13,19 @@ class _CancelledError(Exception):
     """Raised inside yt-dlp hooks to abort a cancelled download."""
 
 
+class _QuietLogger:
+    """Suppress all yt-dlp console output."""
+
+    def debug(self, msg):
+        pass
+
+    def warning(self, msg):
+        pass
+
+    def error(self, msg):
+        pass
+
+
 class DownloadWorker(QThread):
     """Background thread that downloads a video from an X/Twitter post."""
 
@@ -74,6 +87,8 @@ class DownloadWorker(QThread):
                 "fragment_retries": 5,
                 "quiet": True,
                 "no_warnings": True,
+                "ignoreerrors": True,
+                "logger": _QuietLogger(),
             }
 
             if self.cookie_browser != "none":
@@ -131,7 +146,11 @@ class DownloadWorker(QThread):
             if moved:
                 self.finished_ok.emit(moved[0])
             else:
-                self.finished_ok.emit(self.save_path)
+                self.error.emit(
+                    "No video found in this post. "
+                    "It may only contain text or images."
+                )
+                return
 
         except _CancelledError:
             return
