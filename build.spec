@@ -2,8 +2,19 @@
 """PyInstaller spec for DownXV macOS app."""
 
 import re
+import shutil
 
 from PyInstaller.utils.hooks import collect_data_files
+
+# Locate ffmpeg/ffprobe so they are bundled inside the .app
+_ffmpeg = shutil.which("ffmpeg")
+_ffprobe = shutil.which("ffprobe")
+if not _ffmpeg or not _ffprobe:
+    raise RuntimeError(
+        "ffmpeg and ffprobe must be in PATH to build. "
+        "Install via: brew install ffmpeg"
+    )
+_ff_binaries = [(_ffmpeg, "."), (_ffprobe, ".")]
 
 _version = re.search(
     r'__version__\s*=\s*"([^"]+)"',
@@ -13,7 +24,7 @@ _version = re.search(
 a = Analysis(
     ["run.py"],
     pathex=[],
-    binaries=[],
+    binaries=_ff_binaries,
     datas=[
         ("assets/logo.png", "assets"),
         ("assets/icon-chrome.svg", "assets"),

@@ -665,7 +665,13 @@ class MainWindow(QMainWindow):
             self._disconnect_worker(worker)
             worker.cancel()
             worker.wait(3000)
-            worker.deleteLater()
+            if worker.isRunning():
+                # Worker is still blocked (e.g. in extract_info).
+                # Deleting a running QThread crashes, so defer cleanup
+                # until the thread actually finishes.
+                worker.finished.connect(worker.deleteLater)
+            else:
+                worker.deleteLater()
             task["worker"] = None
             task["active"] = False
         self._tasks.remove(task)
@@ -700,6 +706,8 @@ class MainWindow(QMainWindow):
                 self._disconnect_worker(worker)
                 worker.cancel()
                 worker.wait(3000)
+                if worker.isRunning():
+                    worker.finished.connect(worker.deleteLater)
         super().closeEvent(event)
 
     # ── macOS title bar ────────────────────────────────────────

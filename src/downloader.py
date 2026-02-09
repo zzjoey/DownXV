@@ -3,6 +3,7 @@
 import glob
 import os
 import shutil
+import sys
 import tempfile
 
 import yt_dlp
@@ -90,6 +91,12 @@ class DownloadWorker(QThread):
                 "ignoreerrors": True,
                 "logger": _QuietLogger(),
             }
+
+            if getattr(sys, "frozen", False):
+                base = getattr(
+                    sys, "_MEIPASS", os.path.dirname(sys.executable)
+                )
+                ydl_opts["ffmpeg_location"] = base
 
             if self.cookie_browser != "none":
                 ydl_opts["cookiesfrombrowser"] = (self.cookie_browser,)
