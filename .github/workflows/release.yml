@@ -45,9 +45,9 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         run: pip install -r requirements.txt
 
-      - name: Install create-dmg
+      - name: Install create-dmg and ffmpeg
         if: steps.version.outputs.changed == 'true'
-        run: brew install create-dmg
+        run: brew install create-dmg ffmpeg
 
       - name: Build app and DMG
         if: steps.version.outputs.changed == 'true'
