@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "build.spec"
+      - "requirements.txt"
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check version change
+        id: version
+        run: |
+          current=$(grep -o '__version__\s*=\s*"[^"]*"' src/__init__.py | cut -d'"' -f2)
+          previous=$(git show HEAD~1:src/__init__.py 2>/dev/null | grep -o '__version__\s*=\s*"[^"]*"' | cut -d'"' -f2 || echo "")
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          if [ "$current" != "$previous" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.version.outputs.changed == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        if: steps.version.outputs.changed == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Install create-dmg
+        if: steps.version.outputs.changed == 'true'
+        run: brew install create-dmg
+
+      - name: Build app and DMG
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.current }}"
+
+          pyinstaller build.spec --noconfirm
+
+          create-dmg \
+            --volname DownXV \
+            --volicon assets/icon.icns \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 120 \
+            --icon DownXV.app 160 185 \
+            --app-drop-link 500 185 \
+            --hide-extension DownXV.app \
+            --no-internet-enable \
+            "dist/DownXV-${VERSION}.dmg" \
+            dist/DownXV.app
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.current }}"
+          gh release create "v${VERSION}" \
+            dist/DownXV-${VERSION}.dmg \
+            --title "DownXV v${VERSION}" \
+            --generate-notes
