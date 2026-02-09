@@ -3,6 +3,8 @@
 
 import re
 
+from PyInstaller.utils.hooks import collect_data_files
+
 _version = re.search(
     r'__version__\s*=\s*"([^"]+)"',
     open("src/__init__.py").read(),
@@ -20,6 +22,7 @@ a = Analysis(
         ("assets/icon-none.svg", "assets"),
         ("assets/icon-github.svg", "assets"),
         ("assets/chevron-down.svg", "assets"),
+        *collect_data_files("certifi"),
     ],
     hiddenimports=[
         "src",
@@ -30,6 +33,7 @@ a = Analysis(
         "src.styles",
         "src.logo",
         "src.updater",
+        "certifi",
     ],
     hookspath=[],
     hooksconfig={},

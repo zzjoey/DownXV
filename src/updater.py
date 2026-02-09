@@ -1,9 +1,11 @@
 """Background thread to check for updates via GitHub Releases API."""
 
 import json
+import ssl
 import urllib.request
 from dataclasses import dataclass
 
+import certifi
 from PySide6.QtCore import QThread, Signal
 
 GITHUB_API_URL = (
@@ -46,7 +48,8 @@ class UpdateChecker(QThread):
                 GITHUB_API_URL,
                 headers={"Accept": "application/vnd.github+json"},
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            ctx = ssl.create_default_context(cafile=certifi.where())
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
                 data = json.loads(resp.read())
 
             tag = data.get("tag_name", "")
