@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("DownXV")
         self.setMinimumSize(920, 560)
-        self.resize(980, 600)
+        self.resize(920, 560)
 
         self._default_save_path = os.path.expanduser("~/Downloads")
         self._tasks: list[dict] = []
