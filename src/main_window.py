@@ -143,8 +143,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("DownXV")
-        self.setMinimumSize(920, 560)
-        self.resize(920, 560)
+        self.setMinimumSize(976, 630)
+        self.resize(976, 630)
 
         self._default_save_path = os.path.expanduser("~/Downloads")
         self._tasks: list[dict] = []
@@ -554,8 +554,15 @@ class MainWindow(QMainWindow):
         self._update_btn.setEnabled(True)
 
     def _on_update_error(self, msg: str) -> None:
-        self._update_icon.setText("")
-        self._update_label.setText(f"v{__version__}")
+        self._update_icon.setText("\u2716")  # ✖
+        self._update_icon.setStyleSheet(
+            "font-size: 14px; color: #e5484d; background: transparent;"
+        )
+        self._update_label.setText("Update check failed")
+        self._update_label.setStyleSheet(
+            "font-size: 12px; color: #e5484d; background: transparent;"
+        )
+        self._update_btn.setText("Retry")
         self._update_btn.setEnabled(True)
 
     # ── Signal Wiring ────────────────────────────────────────────
