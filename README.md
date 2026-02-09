@@ -2,6 +2,8 @@
 
 [![Release](https://github.com/zzjoey/DownXV/actions/workflows/release.yml/badge.svg)](https://github.com/zzjoey/DownXV/actions/workflows/release.yml)
 
+[简体中文](README_CN.md)
+
 A free, open-source macOS app to download videos from X (Twitter) posts.
 
 **Auto-fill cookies from your browser. Support multiple videos in one post. No login required for public content.**
