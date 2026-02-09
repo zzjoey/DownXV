@@ -8,24 +8,13 @@ A free, open-source macOS app to download videos from X (Twitter) posts.
 
 **Auto-fill cookies from your browser. Support multiple videos in one post. No login required for public content.**
 
-<p align="center">
-  <img src="assets/images/post.png" width="30%" alt="X Post" />
-  &nbsp;&nbsp;→&nbsp;&nbsp;
-  <img src="assets/images/ui.png" width="30%" alt="DownXV App" />
-  &nbsp;&nbsp;→&nbsp;&nbsp;
-  <img src="assets/images/download.png" width="30%" alt="Saved MP4" />
-</p>
-<p align="center">
-  <b>X Post</b>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <b>DownXV</b>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <b>MP4 Saved</b>
-</p>
+| 1. Find a post on X | 2. Paste URL in DownXV | 3. MP4 saved |
+| :---: | :---: | :---: |
+| <img src="assets/images/post.png" width="280" alt="X Post" /> | <img src="assets/images/ui.png" width="280" alt="DownXV App" /> | <img src="assets/images/download.png" width="280" alt="Saved MP4" /> |
 
 ## Features
 
-- **Auto-fill browser cookies** — reads cookies from Chrome, Firefox, or Edge to access authenticated content, no manual export needed
+- **Auto-fill browser cookies** — reads cookies from <img src="assets/icon-chrome.svg" width="16" height="16" alt="Chrome" /> Chrome, <img src="assets/icon-firefox.svg" width="16" height="16" alt="Firefox" /> Firefox, or <img src="assets/icon-edge.svg" width="16" height="16" alt="Edge" /> Edge to access authenticated content, no manual export needed
 - **Multi-video support** — downloads all videos from posts containing multiple media items
 - **Concurrent downloads** — queue up to 3 downloads at once, each with its own progress card
 - **Quality selection** — Best, 1080p, 720p, 480p, or audio only

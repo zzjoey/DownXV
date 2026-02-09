@@ -8,24 +8,13 @@
 
 **自动读取浏览器 Cookie，支持多视频推文，公开内容无需登录。**
 
-<p align="center">
-  <img src="assets/images/post.png" width="30%" alt="X 推文" />
-  &nbsp;&nbsp;→&nbsp;&nbsp;
-  <img src="assets/images/ui.png" width="30%" alt="DownXV 应用" />
-  &nbsp;&nbsp;→&nbsp;&nbsp;
-  <img src="assets/images/download.png" width="30%" alt="保存的 MP4" />
-</p>
-<p align="center">
-  <b>X 推文</b>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <b>DownXV</b>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <b>MP4 已保存</b>
-</p>
+| 1. 找到 X 上的推文 | 2. 在 DownXV 中粘贴链接 | 3. MP4 已保存 |
+| :---: | :---: | :---: |
+| <img src="assets/images/post.png" width="280" alt="X 推文" /> | <img src="assets/images/ui.png" width="280" alt="DownXV 应用" /> | <img src="assets/images/download.png" width="280" alt="保存的 MP4" /> |
 
 ## 功能
 
-- **自动读取浏览器 Cookie** — 从 Chrome、Firefox 或 Edge 读取 Cookie 以访问需要登录的内容，无需手动导出
+- **自动读取浏览器 Cookie** — 从 <img src="assets/icon-chrome.svg" width="16" height="16" alt="Chrome" /> Chrome、<img src="assets/icon-firefox.svg" width="16" height="16" alt="Firefox" /> Firefox 或 <img src="assets/icon-edge.svg" width="16" height="16" alt="Edge" /> Edge 读取 Cookie 以访问需要登录的内容，无需手动导出
 - **多视频支持** — 自动下载推文中包含的所有视频
 - **并发下载** — 最多同时下载 3 个任务，每个任务独立显示进度
 - **画质选择** — 最佳画质、1080p、720p、480p 或仅音频
