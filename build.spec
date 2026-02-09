@@ -12,7 +12,15 @@ a = Analysis(
     ["run.py"],
     pathex=[],
     binaries=[],
-    datas=[("assets/logo.png", "assets")],
+    datas=[
+        ("assets/logo.png", "assets"),
+        ("assets/icon-chrome.svg", "assets"),
+        ("assets/icon-firefox.svg", "assets"),
+        ("assets/icon-edge.svg", "assets"),
+        ("assets/icon-none.svg", "assets"),
+        ("assets/icon-github.svg", "assets"),
+        ("assets/chevron-down.svg", "assets"),
+    ],
     hiddenimports=[
         "src",
         "src.app",
