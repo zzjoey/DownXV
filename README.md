@@ -1,8 +1,25 @@
 # DownXV
 
+[![Release](https://github.com/zzjoey/DownXV/actions/workflows/release.yml/badge.svg)](https://github.com/zzjoey/DownXV/actions/workflows/release.yml)
+
 A free, open-source macOS app to download videos from X (Twitter) posts.
 
 **Auto-fill cookies from your browser. Support multiple videos in one post. No login required for public content.**
+
+<p align="center">
+  <img src="assets/images/post.png" width="30%" alt="X Post" />
+  &nbsp;&nbsp;→&nbsp;&nbsp;
+  <img src="assets/images/ui.png" width="30%" alt="DownXV App" />
+  &nbsp;&nbsp;→&nbsp;&nbsp;
+  <img src="assets/images/download.png" width="30%" alt="Saved MP4" />
+</p>
+<p align="center">
+  <b>X Post</b>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <b>DownXV</b>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <b>MP4 Saved</b>
+</p>
 
 ## Features
 
@@ -15,10 +32,6 @@ A free, open-source macOS app to download videos from X (Twitter) posts.
 - **Click to reveal** — click a completed download card to reveal the file in Finder
 - **Safe temp cleanup** — temp files are cleaned up on success, failure, cancel, and window close
 - **Native macOS look** — San Francisco system font, transparent titlebar, premium light theme with purple accents
-
-## Screenshot
-
-<!-- TODO: add screenshot -->
 
 ## Getting Started
 
