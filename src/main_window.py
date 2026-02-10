@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-from PySide6.QtCore import QEvent, QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QComboBox,
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__
-from .downloader import DownloadWorker
+from .downloader import DownloadWorker, InfoExtractWorker
 from .logo import create_logo_pixmap
 from .updater import UpdateChecker
 from .url_validator import validate_url
@@ -65,7 +65,7 @@ class _DownloadCard(QFrame):
     dismissed = Signal()
     open_file = Signal(str)
 
-    def __init__(self) -> None:
+    def __init__(self, title: str = "Starting download...") -> None:
         super().__init__()
         self.setObjectName("card")
         self._is_done = False
@@ -77,7 +77,7 @@ class _DownloadCard(QFrame):
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        self._title = _ElidedLabel("Starting download...")
+        self._title = _ElidedLabel(title)
         self._title.setObjectName("cardTitle")
         header.addWidget(self._title, 1)
         self._percent = QLabel("0%")
@@ -104,10 +104,14 @@ class _DownloadCard(QFrame):
         layout.addWidget(self._stats)
 
     def on_progress(self, percent: int) -> None:
+        if self._is_done:
+            return
         self._bar.setValue(percent)
         self._percent.setText(f"{percent}%")
 
     def on_status(self, message: str) -> None:
+        if self._is_done:
+            return
         if "·" in message:
             self._stats.setText(message)
         elif "Merging" in message or "audio track" in message:
@@ -118,11 +122,12 @@ class _DownloadCard(QFrame):
     def mark_complete(self, filepath: str) -> None:
         self._is_done = True
         self._filepath = filepath
+        self._title.setText(os.path.basename(filepath))
         self._bar.setValue(100)
         self._percent.setText("100%")
         self._stats.setObjectName("successLabel")
         self._stats.setStyleSheet("")
-        self._stats.setText(f"Saved: {os.path.basename(filepath)}")
+        self._stats.setText(f"Saved to: {os.path.dirname(filepath)}")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def mark_error(self, message: str) -> None:
@@ -148,6 +153,7 @@ class MainWindow(QMainWindow):
 
         self._default_save_path = os.path.expanduser("~/Downloads")
         self._tasks: list[dict] = []
+        self._info_extractor: InfoExtractWorker | None = None
         self._titlebar_styled = False
 
         self._build_ui()
@@ -606,10 +612,68 @@ class MainWindow(QMainWindow):
         quality = self._quality_combo.currentText()
         cookie_browser = self._cookie_combo.currentText().lower()
 
-        card = _DownloadCard()
+        # Phase 1: extract info to discover video count
+        self._download_btn.setEnabled(False)
+        self._download_btn.setText("Extracting video info...")
+
+        extractor = InfoExtractWorker(url, cookie_browser)
+        self._info_extractor = extractor
+        extractor.info_ready.connect(
+            lambda info, u=url, s=save_path, q=quality, c=cookie_browser:
+                self._on_info_ready(info, u, s, q, c)
+        )
+        extractor.error.connect(self._on_info_error)
+        extractor.finished.connect(self._on_info_extractor_done)
+
+        self._url_input.clear()
+        self._url_input.setFocus()
+        extractor.start()
+
+    def _on_info_ready(
+        self, info: dict, url: str, save_path: str,
+        quality: str, cookie_browser: str,
+    ) -> None:
+        """Phase 2: create one card + worker per video."""
+        entries = info.get("entries")
+
+        if entries:
+            entries_list = [e for e in entries if e is not None]
+            video_count = len(entries_list)
+            parent_title = info.get("title", "video")
+            workers: list[DownloadWorker] = []
+            for i, entry in enumerate(entries_list, 1):
+                title = entry.get("title", parent_title)
+                if video_count > 1:
+                    display = f"{title[:50]} ({i}/{video_count})"
+                else:
+                    display = title[:60]
+                w = self._create_download(
+                    url, save_path, quality, cookie_browser,
+                    display, playlist_item=i,
+                )
+                workers.append(w)
+            # Stagger starts so video 1 begins first
+            for idx, w in enumerate(workers):
+                QTimer.singleShot(idx * 200, w.start)
+        else:
+            title = info.get("title", "video")
+            w = self._create_download(
+                url, save_path, quality, cookie_browser, title[:60],
+            )
+            w.start()
+
+    def _create_download(
+        self, url: str, save_path: str, quality: str,
+        cookie_browser: str, title: str,
+        playlist_item: int | None = None,
+    ) -> DownloadWorker:
+        card = _DownloadCard(title)
         self._tasks_layout.insertWidget(self._tasks_layout.count() - 1, card)
 
-        worker = DownloadWorker(url, save_path, quality, cookie_browser)
+        worker = DownloadWorker(
+            url, save_path, quality, cookie_browser,
+            playlist_item=playlist_item,
+        )
         task = {"worker": worker, "card": card, "active": True}
         self._tasks.append(task)
 
@@ -627,10 +691,15 @@ class MainWindow(QMainWindow):
         card.dismissed.connect(lambda t=task: self._dismiss_task(t))
         card.open_file.connect(self._open_file)
 
-        self._url_input.clear()
-        self._url_input.setFocus()
         self._update_state()
-        worker.start()
+        return worker
+
+    def _on_info_error(self, message: str) -> None:
+        self._show_error(message)
+
+    def _on_info_extractor_done(self) -> None:
+        self._info_extractor = None
+        self._update_state()
 
     # ── Task callbacks ───────────────────────────────────────────
 
@@ -700,6 +769,9 @@ class MainWindow(QMainWindow):
     # ── Window close ─────────────────────────────────────────
 
     def closeEvent(self, event) -> None:
+        if self._info_extractor and self._info_extractor.isRunning():
+            self._info_extractor.cancel()
+            self._info_extractor.wait(2000)
         for task in self._tasks:
             worker = task.get("worker")
             if worker and task["active"]:
@@ -794,12 +866,16 @@ class MainWindow(QMainWindow):
         active = self._active_count()
         done = self._done_count()
         total = len(self._tasks)
-        at_limit = active >= _MAX_CONCURRENT
+        extracting = (
+            self._info_extractor is not None
+            and self._info_extractor.isRunning()
+        )
+        at_limit = active >= _MAX_CONCURRENT or extracting
         self._download_btn.setEnabled(not at_limit)
-        if at_limit:
-            self._download_btn.setText(
-                f"Max {_MAX_CONCURRENT} concurrent downloads"
-            )
+        if extracting:
+            self._download_btn.setText("Extracting video info...")
+        elif active >= _MAX_CONCURRENT:
+            self._download_btn.setText("Downloading...")
         else:
             self._download_btn.setText("Download Video")
         self._clear_all_btn.setVisible(done > 0)

@@ -18,7 +18,7 @@ create-dmg \
     --volicon "assets/icon.icns" \
     --window-pos 200 120 \
     --window-size 660 400 \
-    --icon-size 120 \
+    --icon-size 128 \
     --icon "$APP_NAME.app" 160 185 \
     --app-drop-link 500 185 \
     --hide-extension "$APP_NAME.app" \

@@ -27,6 +27,99 @@ class _QuietLogger:
         pass
 
 
+def _clean_error(raw: str) -> str:
+    msg = raw.removeprefix("ERROR: ")
+
+    if "is not a valid URL" in msg or "Unsupported URL" in msg:
+        return "Invalid URL. Please paste a valid X/Twitter post link."
+    if "HTTP Error 404" in msg or "Unable to download" in msg:
+        return "Post not found. It may have been deleted or the URL is wrong."
+    if "HTTP Error 403" in msg:
+        return "Access denied. The post may be private or age-restricted."
+    if "No video could be found" in msg:
+        return (
+            "No video found. Try selecting a browser cookie source "
+            "(Chrome/Firefox) — most X videos require authentication."
+        )
+    if "No video" in msg.lower():
+        return "No video found in this post."
+    if "urlopen error" in msg or "timed out" in msg:
+        return "Network error. Please check your internet connection."
+    if "Sign in" in msg or "login" in msg.lower():
+        return (
+            "This post requires authentication. "
+            "Select Chrome or Firefox as cookie source."
+        )
+    if "Operation not permitted" in msg and "Cookies" in msg:
+        return (
+            "Cannot access browser cookies. "
+            "Try Chrome or Firefox instead of Safari, "
+            "or grant Full Disk Access in System Settings."
+        )
+
+    return msg
+
+
+class InfoExtractWorker(QThread):
+    """Extracts video info from a URL without downloading."""
+
+    info_ready = Signal(object)
+    error = Signal(str)
+
+    def __init__(self, url: str, cookie_browser: str) -> None:
+        super().__init__()
+        self.url = url
+        self.cookie_browser = cookie_browser
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def run(self) -> None:
+        try:
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "logger": _QuietLogger(),
+                "ignoreerrors": True,
+            }
+            if self.cookie_browser != "none":
+                ydl_opts["cookiesfrombrowser"] = (self.cookie_browser,)
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+                if self._cancelled:
+                    return
+                if info is None:
+                    self.error.emit(
+                        "Could not extract video information from this URL."
+                    )
+                    return
+
+                has_video = bool(info.get("formats"))
+                entries = info.get("entries")
+                if entries:
+                    has_video = True
+
+                if not has_video:
+                    self.error.emit(
+                        "No video found in this post. "
+                        "It may only contain text or images."
+                    )
+                    return
+
+                self.info_ready.emit(info)
+
+        except yt_dlp.utils.DownloadError as e:
+            if self._cancelled:
+                return
+            self.error.emit(_clean_error(str(e)))
+        except Exception as e:
+            if self._cancelled:
+                return
+            self.error.emit(f"Unexpected error: {e}")
+
+
 class DownloadWorker(QThread):
     """Background thread that downloads a video from an X/Twitter post."""
 
@@ -45,13 +138,19 @@ class DownloadWorker(QThread):
     }
 
     def __init__(
-        self, url: str, save_path: str, quality: str, cookie_browser: str
+        self,
+        url: str,
+        save_path: str,
+        quality: str,
+        cookie_browser: str,
+        playlist_item: int | None = None,
     ) -> None:
         super().__init__()
         self.url = url
         self.save_path = save_path
         self.quality = quality
         self.cookie_browser = cookie_browser  # "none", "chrome", "firefox", "edge"
+        self._playlist_item = playlist_item
         self._stream_index = 0
         self._total_streams = 1
         self._tmp_dir: str | None = None
@@ -72,8 +171,6 @@ class DownloadWorker(QThread):
         tmp_dir = tempfile.mkdtemp(prefix=".downxv_", dir=self.save_path)
         self._tmp_dir = tmp_dir
         try:
-            self.status_update.emit("Extracting video info...")
-
             format_str = self.FORMAT_MAP.get(
                 self.quality, "bestvideo+bestaudio/best"
             )
@@ -101,44 +198,15 @@ class DownloadWorker(QThread):
             if self.cookie_browser != "none":
                 ydl_opts["cookiesfrombrowser"] = (self.cookie_browser,)
 
+            if self._playlist_item is not None:
+                ydl_opts["playlist_items"] = str(self._playlist_item)
+
+            # Progress tracking: one video only (multi-video is split upstream)
+            streams_per_video = 2 if "+" in format_str else 1
+            self._total_streams = streams_per_video
+            self._stream_index = 0
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(self.url, download=False)
-
-                if info is None:
-                    self.error.emit(
-                        "Could not extract video information from this URL."
-                    )
-                    return
-
-                # Handle both single videos and playlists (multi-video tweets)
-                has_video = bool(info.get("formats"))
-                entries = info.get("entries")
-                if entries:
-                    has_video = True
-
-                if not has_video:
-                    self.error.emit(
-                        "No video found in this post. "
-                        "It may only contain text or images."
-                    )
-                    return
-
-                title = info.get("title", "video")
-                video_count = 1
-                if entries:
-                    video_count = info.get("playlist_count", len(list(entries)))
-                    self.status_update.emit(
-                        f"Downloading {video_count} video(s): {title[:60]}"
-                    )
-                else:
-                    self.status_update.emit(f"Downloading: {title[:60]}")
-
-                # Set up combined progress tracking across streams
-                streams_per_video = 2 if "+" in format_str else 1
-                self._total_streams = video_count * streams_per_video
-                self._stream_index = 0
-
-                # Re-extract with download=True (entries iterator is consumed)
                 ydl.download([self.url])
 
             # Move only final files (mp4/m4a) to the user's save directory
@@ -164,7 +232,7 @@ class DownloadWorker(QThread):
         except yt_dlp.utils.DownloadError as e:
             if self._cancelled:
                 return
-            self.error.emit(self._clean_error(str(e)))
+            self.error.emit(_clean_error(str(e)))
         except Exception as e:
             if self._cancelled:
                 return
@@ -236,36 +304,3 @@ class DownloadWorker(QThread):
             return f"{m}m {s}s"
         h, m = divmod(m, 60)
         return f"{h}h {m}m"
-
-    @staticmethod
-    def _clean_error(raw: str) -> str:
-        msg = raw.removeprefix("ERROR: ")
-
-        if "is not a valid URL" in msg or "Unsupported URL" in msg:
-            return "Invalid URL. Please paste a valid X/Twitter post link."
-        if "HTTP Error 404" in msg or "Unable to download" in msg:
-            return "Post not found. It may have been deleted or the URL is wrong."
-        if "HTTP Error 403" in msg:
-            return "Access denied. The post may be private or age-restricted."
-        if "No video could be found" in msg:
-            return (
-                "No video found. Try selecting a browser cookie source "
-                "(Chrome/Firefox) — most X videos require authentication."
-            )
-        if "No video" in msg.lower():
-            return "No video found in this post."
-        if "urlopen error" in msg or "timed out" in msg:
-            return "Network error. Please check your internet connection."
-        if "Sign in" in msg or "login" in msg.lower():
-            return (
-                "This post requires authentication. "
-                "Select Chrome or Firefox as cookie source."
-            )
-        if "Operation not permitted" in msg and "Cookies" in msg:
-            return (
-                "Cannot access browser cookies. "
-                "Try Chrome or Firefox instead of Safari, "
-                "or grant Full Disk Access in System Settings."
-            )
-
-        return msg
