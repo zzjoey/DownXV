@@ -63,7 +63,7 @@ def _clean_error(raw: str) -> str:
 class InfoExtractWorker(QThread):
     """Extracts video info from a URL without downloading."""
 
-    info_ready = Signal(object)
+    info_ready = Signal(dict)  # {"titles": list[str], "parent_title": str | None}
     error = Signal(str)
 
     def __init__(self, url: str, cookie_browser: str) -> None:
@@ -98,8 +98,22 @@ class InfoExtractWorker(QThread):
 
                 has_video = bool(info.get("formats"))
                 entries = info.get("entries")
+                titles: list[str] = []
+                parent_title: str | None = None
+
                 if entries:
-                    has_video = True
+                    # Materialize lazy entries and extract titles while
+                    # ydl context is still alive
+                    if not isinstance(entries, list):
+                        entries = list(entries)
+                    parent_title = str(info.get("title", "video"))
+                    for entry in entries:
+                        if entry is not None:
+                            titles.append(str(entry.get("title", parent_title)))
+                    has_video = len(titles) > 0
+                else:
+                    # Single video
+                    titles = [str(info.get("title", "video"))]
 
                 if not has_video:
                     self.error.emit(
@@ -108,7 +122,11 @@ class InfoExtractWorker(QThread):
                     )
                     return
 
-                self.info_ready.emit(info)
+                # Emit extracted data as pure Python types
+                self.info_ready.emit({
+                    "titles": titles,
+                    "parent_title": parent_title,
+                })
 
         except yt_dlp.utils.DownloadError as e:
             if self._cancelled:

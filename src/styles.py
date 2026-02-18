@@ -14,8 +14,7 @@ def _asset(name: str) -> str:
 STYLESHEET = """
 /* ── Global ── */
 * {
-    font-family: ".AppleSystemUIFont", "SF Pro Text", "Helvetica Neue",
-                 "Segoe UI", sans-serif;
+    font-family: ".AppleSystemUIFont", "Helvetica Neue";
 }
 
 QMainWindow {

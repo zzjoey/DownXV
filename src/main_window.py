@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QDesktopServices, QIcon
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPainter
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -18,7 +18,9 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QStyle,
     QStyledItemDelegate,
+    QStyleOption,
     QVBoxLayout,
     QWidget,
 )
@@ -70,6 +72,7 @@ class _DownloadCard(QFrame):
         self.setObjectName("card")
         self._is_done = False
         self._filepath: str | None = None
+        self._full_title = title
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 8, 14, 8)
@@ -77,8 +80,14 @@ class _DownloadCard(QFrame):
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        self._title = _ElidedLabel(title)
+        self._title = QLabel(title)
         self._title.setObjectName("cardTitle")
+        self._title.setTextFormat(Qt.TextFormat.PlainText)
+        self._title.setWordWrap(False)
+        # Set size policy to prevent label from expanding beyond container
+        from PySide6.QtWidgets import QSizePolicy
+        self._title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._title.setToolTip(title)
         header.addWidget(self._title, 1)
         self._percent = QLabel("0%")
         self._percent.setObjectName("percentLabel")
@@ -99,8 +108,11 @@ class _DownloadCard(QFrame):
         self._bar.setTextVisible(False)
         layout.addWidget(self._bar)
 
-        self._stats = _ElidedLabel("")
+        self._stats = QLabel("")
         self._stats.setObjectName("statsLabel")
+        self._stats.setTextFormat(Qt.TextFormat.PlainText)
+        self._stats.setWordWrap(False)
+        self._stats.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._stats)
 
     def on_progress(self, percent: int) -> None:
@@ -108,6 +120,27 @@ class _DownloadCard(QFrame):
             return
         self._bar.setValue(percent)
         self._percent.setText(f"{percent}%")
+
+    def _update_title_elide(self) -> None:
+        """Update title text with elision based on available width."""
+        if not self._title.width():
+            return
+        fm = self._title.fontMetrics()
+        elided = fm.elidedText(
+            self._full_title,
+            Qt.TextElideMode.ElideRight,
+            self._title.width()
+        )
+        self._title.setText(elided)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Update elided text after widget is shown and has proper geometry
+        QTimer.singleShot(0, self._update_title_elide)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._update_title_elide()
 
     def on_status(self, message: str) -> None:
         if self._is_done:
@@ -117,24 +150,35 @@ class _DownloadCard(QFrame):
         elif "Merging" in message or "audio track" in message:
             self._stats.setText(message)
         else:
-            self._title.setText(message)
+            self._full_title = message
+            self._update_title_elide()
 
     def mark_complete(self, filepath: str) -> None:
         self._is_done = True
         self._filepath = filepath
-        self._title.setText(os.path.basename(filepath))
+        self._full_title = os.path.basename(filepath)
+        self._update_title_elide()
         self._bar.setValue(100)
         self._percent.setText("100%")
         self._stats.setObjectName("successLabel")
-        self._stats.setStyleSheet("")
+        self._stats.style().unpolish(self._stats)
+        self._stats.style().polish(self._stats)
         self._stats.setText(f"Saved to: {os.path.dirname(filepath)}")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def mark_error(self, message: str) -> None:
         self._is_done = True
         self._stats.setObjectName("errorLabel")
-        self._stats.setStyleSheet("")
+        self._stats.style().unpolish(self._stats)
+        self._stats.style().polish(self._stats)
         self._stats.setText(message)
+
+    def paintEvent(self, event) -> None:
+        opt = QStyleOption()
+        opt.initFrom(self)
+        p = QPainter(self)
+        self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
+        p.end()
 
     def mousePressEvent(self, event) -> None:
         if self._is_done and self._filepath and os.path.exists(self._filepath):
@@ -154,7 +198,12 @@ class MainWindow(QMainWindow):
         self._default_save_path = os.path.expanduser("~/Downloads")
         self._tasks: list[dict] = []
         self._info_extractor: InfoExtractWorker | None = None
+        self._pending_url: str = ""
+        self._pending_save_path: str = ""
+        self._pending_quality: str = ""
+        self._pending_cookie: str = ""
         self._titlebar_styled = False
+        self._drag_position = None
 
         self._build_ui()
         self._build_menu()
@@ -616,12 +665,14 @@ class MainWindow(QMainWindow):
         self._download_btn.setEnabled(False)
         self._download_btn.setText("Extracting video info...")
 
+        self._pending_url = url
+        self._pending_save_path = save_path
+        self._pending_quality = quality
+        self._pending_cookie = cookie_browser
+
         extractor = InfoExtractWorker(url, cookie_browser)
         self._info_extractor = extractor
-        extractor.info_ready.connect(
-            lambda info, u=url, s=save_path, q=quality, c=cookie_browser:
-                self._on_info_ready(info, u, s, q, c)
-        )
+        extractor.info_ready.connect(self._on_info_ready)
         extractor.error.connect(self._on_info_error)
         extractor.finished.connect(self._on_info_extractor_done)
 
@@ -629,24 +680,21 @@ class MainWindow(QMainWindow):
         self._url_input.setFocus()
         extractor.start()
 
-    def _on_info_ready(
-        self, info: dict, url: str, save_path: str,
-        quality: str, cookie_browser: str,
-    ) -> None:
+    def _on_info_ready(self, data: dict) -> None:
         """Phase 2: create one card + worker per video."""
-        entries = info.get("entries")
+        url = self._pending_url
+        save_path = self._pending_save_path
+        quality = self._pending_quality
+        cookie_browser = self._pending_cookie
 
-        if entries:
-            entries_list = [e for e in entries if e is not None]
-            video_count = len(entries_list)
-            parent_title = info.get("title", "video")
+        titles: list[str] = data["titles"]
+        video_count = len(titles)
+
+        if video_count > 1:
+            # Multi-video: create one worker per video
             workers: list[DownloadWorker] = []
-            for i, entry in enumerate(entries_list, 1):
-                title = entry.get("title", parent_title)
-                if video_count > 1:
-                    display = f"{title[:50]} ({i}/{video_count})"
-                else:
-                    display = title[:60]
+            for i, title in enumerate(titles, 1):
+                display = f"{title[:50]} ({i}/{video_count})"
                 w = self._create_download(
                     url, save_path, quality, cookie_browser,
                     display, playlist_item=i,
@@ -656,11 +704,13 @@ class MainWindow(QMainWindow):
             for idx, w in enumerate(workers):
                 QTimer.singleShot(idx * 200, w.start)
         else:
-            title = info.get("title", "video")
+            # Single video
+            title = titles[0] if titles else "video"
             w = self._create_download(
-                url, save_path, quality, cookie_browser, title[:60],
+                url, save_path, quality, cookie_browser, title,
             )
-            w.start()
+            # Delay worker start to let UI event loop settle
+            QTimer.singleShot(100, w.start)
 
     def _create_download(
         self, url: str, save_path: str, quality: str,
@@ -888,3 +938,36 @@ class MainWindow(QMainWindow):
     def _clear_error(self) -> None:
         self._error_label.setText("")
         self._error_label.hide()
+
+    # ── Window Dragging ──────────────────────────────────────────
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Allow dragging from top area (first 80px) or empty areas
+            if event.position().y() < 80:
+                # Check if clicked on a widget that should handle its own events
+                widget = self.childAt(event.position().toPoint())
+                # Allow drag only if clicking on container/layout widgets, not controls
+                if widget is None or isinstance(widget, (QWidget, QFrame, QLabel)):
+                    # Exclude interactive labels (those with click handlers)
+                    if isinstance(widget, QLabel):
+                        # Check if it's a clickable label (has cursor set)
+                        if widget.cursor().shape() == Qt.CursorShape.PointingHandCursor:
+                            super().mousePressEvent(event)
+                            return
+                    self._drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                    event.accept()
+                    return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if event.buttons() == Qt.MouseButton.LeftButton and self._drag_position is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_position)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_position = None
+        super().mouseReleaseEvent(event)
